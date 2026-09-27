@@ -2,7 +2,12 @@
 local E = core.formspec_escape
 local root = core.get_user_path()
 local game = root .. "/games/mineclonia"
-local state = {page="home", selected=1, name="新的世界", seed="", creative=false, gen="自然世界", message=""}
+local state = {
+ page="home", selected=1, host_selected=1, name="新的世界", seed="",
+ creative=false, gen="自然世界", message="",
+ host_name="Player", host_port="30000", host_password="",
+ join_address="", join_port="30000", join_name="Player", join_password=""
+}
 local worlds = {}
 local profiles = {
  ["柔和光影"]={enable_dynamic_shadows=true,enable_water_reflections=true,enable_bloom=true,enable_volumetric_lighting=true,tone_mapping=true,enable_waving_water=true,enable_waving_leaves=true,enable_waving_plants=true,enable_translucent_foliage=true,viewing_range=128,shadow_map_texture_size=2048,shadow_map_max_distance=100},
@@ -26,6 +31,7 @@ end
 local function refresh()
  worlds = core.get_worlds()
  state.selected = math.min(math.max(state.selected,1),math.max(#worlds,1))
+ state.host_selected = math.min(math.max(state.host_selected,1),math.max(#worlds,1))
  local f="formspec_version[6]size[12,8]padding[0.05,0.05]bgcolor[#111820A0;true]"..
   "style_type[button;bgcolor=#797979;textcolor=#FFFFFF;border=true;font_size=18]"..
   "style_type[field;bgcolor=#191919;textcolor=#FFFFFF]style_type[label;textcolor=#FFFFFF]"
@@ -33,8 +39,36 @@ local function refresh()
   f=f.."hypertext[0,0.8;12,1.7;logo;<global halign=center color=#2b3035 size=58><b>方 块 世 界</b>]"..
    "hypertext[0,0.7;12,1.7;logo2;<global halign=center color=#eeeeee size=58><b>方 块 世 界</b>]"..
    "hypertext[0,2.3;12,0.5;sub;<global halign=center color=#FFE873 size=18>每一个方块，都有新的可能。]"..
-   btn(3,3.2,6,"single","单人游戏")..btn(3,4.05,6,"options","选项…")..btn(3,4.9,6,"help","操作说明")..btn(3,5.75,6,"exit","退出游戏")..
+   btn(3,3.0,6,"single","单人游戏")..btn(3,3.8,6,"multiplayer","多人游戏")..btn(3,4.6,6,"options","选项…")..btn(3,5.4,6,"help","操作说明")..btn(3,6.2,6,"exit","退出游戏")..
    "label[0,7.7;方块世界 0.1.0 · 离线单机]label[7.3,7.7;Luanti / Mineclonia 开源版]"
+ elseif state.page=="multiplayer" then
+  f=f..title("多人游戏")..
+   btn(2,1.55,8,"host","创建联机世界")..
+   btn(2,2.55,8,"join","加入服务器")..
+   "textarea[1,4.0;10,1.8;;;"..E("创建联机世界：朋友可以通过局域网地址加入；配置路由器端口转发后，也可以通过公网 IP 或域名加入。\n加入服务器：输入主机地址和端口。默认端口为 UDP 30000。").."]"..
+   btn(3,6.8,6,"back","返回")
+ elseif state.page=="host" then
+  f=f..title("创建联机世界")
+  local labels={}
+  for _,w in ipairs(worlds) do
+   local s=Settings(w.path.."/world.mt")
+   labels[#labels+1]=E(w.name .. "  ·  " .. (s:get_bool("creative_mode") and "创造模式" or "生存模式"))
+  end
+  f=f.."label[0.7,1.05;选择要开放的世界]"..
+   "textlist[0.7,1.35;5.0,3.7;hostworlds;"..table.concat(labels,",")..";"..state.host_selected..";false]"..
+   "field[6.3,1.45;4.8,0.7;host_name;主机玩家名;"..E(state.host_name).."]field_close_on_enter[host_name;false]"..
+   "field[6.3,2.35;4.8,0.7;host_port;端口（UDP）;"..E(state.host_port).."]field_close_on_enter[host_port;false]"..
+   "pwdfield[6.3,3.25;4.8,0.7;host_password;主机账号密码]"..
+   "textarea[6.3,4.35;4.8,1.3;;;"..E("默认监听 0.0.0.0，局域网和端口转发后的公网连接都可用。\n建议使用非空密码。").."]"..
+   btn(0.7,6.7,5.0,"start_host","启动主机并进入")..btn(6.3,6.7,4.8,"back","返回")
+ elseif state.page=="join" then
+  f=f..title("加入服务器")..
+   "field[2.0,1.65;8.0,0.7;join_address;服务器地址（IP 或域名）;"..E(state.join_address).."]field_close_on_enter[join_address;false]"..
+   "field[2.0,2.65;8.0,0.7;join_port;端口（UDP）;"..E(state.join_port).."]field_close_on_enter[join_port;false]"..
+   "field[2.0,3.65;8.0,0.7;join_name;玩家名;"..E(state.join_name).."]field_close_on_enter[join_name;false]"..
+   "pwdfield[2.0,4.65;8.0,0.7;join_password;账号密码]"..
+   "textarea[2.0,5.55;8.0,0.8;;;"..E("首次连接时，如果服务器允许注册，可以使用新的账号密码。").."]"..
+   btn(2.0,6.8,3.8,"join_server","连接")..btn(6.2,6.8,3.8,"back","返回")
  elseif state.page=="worlds" then
   f=f..title("选择世界")
   local labels={}
@@ -68,6 +102,8 @@ end
 local function play(index)
  local w=worlds[index]; if not w then return end
  local s=Settings(w.path.."/world.mt")
+ core.settings:set_bool("enable_server",false)
+ core.settings:set_bool("server_announce",false)
  core.settings:set_bool("creative_mode",s:get_bool("creative_mode",false))
  core.settings:set_bool("enable_damage",s:get_bool("enable_damage",true))
  core.settings:set("local_last_world",w.name)
@@ -78,17 +114,86 @@ local function play(index)
  gamedata.address=""
  core.start()
 end
+local function parse_port(raw)
+ local text=tostring(raw or ""):trim()
+ if not text:match("^%d+$") then return nil end
+ local port=tonumber(text)
+ if not port or port<1 or port>65535 then return nil end
+ return port
+end
+local function start_host()
+ local w=worlds[state.host_selected]
+ local name=tostring(state.host_name or ""):trim()
+ local password=tostring(state.host_password or "")
+ local port=parse_port(state.host_port)
+ if not w then state.message="请先创建至少一个世界。"; return end
+ if name=="" or name:find("[%c]") then state.message="请输入有效的主机玩家名。"; return end
+ if password=="" then state.message="为了避免公网服务器被滥用，请设置非空账号密码。"; return end
+ if not port then state.message="端口必须是 1 到 65535 之间的数字。"; return end
+ local s=Settings(w.path.."/world.mt")
+ core.settings:set_bool("creative_mode",s:get_bool("creative_mode",false))
+ core.settings:set_bool("enable_damage",s:get_bool("enable_damage",true))
+ core.settings:set_bool("enable_server",true)
+ core.settings:set_bool("server_announce",false)
+ core.settings:set("bind_address","0.0.0.0")
+ core.settings:set("port",tostring(port))
+ core.settings:set("server_name","方块世界多人服务器")
+ core.settings:set("motd","方块世界 · 请遵守主机规则")
+ core.settings:set_bool("disallow_empty_password",true)
+ core.settings:write()
+ gamedata.selected_world=state.host_selected
+ gamedata.mode="host"
+ gamedata.address=""
+ gamedata.port=port
+ gamedata.playername=name
+ gamedata.password=password
+ gamedata.allow_login_or_register="any"
+ core.start()
+end
+local function join_server()
+ local address=tostring(state.join_address or ""):trim()
+ local name=tostring(state.join_name or ""):trim()
+ local port=parse_port(state.join_port)
+ if address=="" or address:find("[%c%s]") then state.message="请输入有效的服务器 IP 或域名。"; return end
+ if name=="" or name:find("[%c]") then state.message="请输入有效的玩家名。"; return end
+ if not port then state.message="端口必须是 1 到 65535 之间的数字。"; return end
+ core.settings:set_bool("enable_server",false)
+ core.settings:set("address",address)
+ core.settings:set("remote_port",tostring(port))
+ core.settings:write()
+ gamedata.selected_world=0
+ gamedata.mode="join"
+ gamedata.address=address
+ gamedata.port=port
+ gamedata.playername=name
+ gamedata.password=tostring(state.join_password or "")
+ gamedata.allow_login_or_register="any"
+ core.start()
+end
 core.button_handler=function(fields)
  state.message=""
  if fields.worldname then state.name=fields.worldname end
  if fields.seed then state.seed=fields.seed end
+ if fields.host_name then state.host_name=fields.host_name end
+ if fields.host_port then state.host_port=fields.host_port end
+ if fields.host_password then state.host_password=fields.host_password end
+ if fields.join_address then state.join_address=fields.join_address end
+ if fields.join_port then state.join_port=fields.join_port end
+ if fields.join_name then state.join_name=fields.join_name end
+ if fields.join_password then state.join_password=fields.join_password end
  if fields.exit then core.close(); return end
  if fields.single then state.page="worlds" end
+ if fields.multiplayer then state.page="multiplayer" end
+ if fields.host then state.page="host"; state.host_selected=state.selected end
+ if fields.join then state.page="join" end
  if fields.options then state.page="options" end
  if fields.help then state.page="help" end
  if fields.back then state.page="home" end
  if fields.cancel then state.page="worlds" end
  if fields.new then state.page="new" end
+ if fields.hostworlds then local ev=core.explode_textlist_event(fields.hostworlds); state.host_selected=ev.index or state.host_selected end
+ if fields.start_host then start_host(); return end
+ if fields.join_server then join_server(); return end
  if fields.mode then state.creative=not state.creative end
  if fields.generator then state.gen=state.gen=="自然世界" and "超平坦" or "自然世界" end
  if fields.worlds then local ev=core.explode_textlist_event(fields.worlds); state.selected=ev.index or state.selected; if ev.type=="DCL" then play(state.selected); return end end

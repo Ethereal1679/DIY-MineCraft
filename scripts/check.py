@@ -9,7 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 ROOT_FILES = [
     "README.md", "LICENSE", "NOTICE.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
-    "SECURITY.md", "CHANGELOG.md", "Start.cmd", "一键启动.cmd", ".gitignore",
+    "SECURITY.md", "CHANGELOG.md", "Start.cmd", "Start-Server.cmd", "一键启动.cmd", ".gitignore",
     ".gitattributes", "dependencies.lock.json", "overrides.json",
 ]
 SOURCE_DIRS = ["src", "assets", "scripts", "docs", "licenses", ".github"]

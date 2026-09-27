@@ -14,3 +14,7 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+
+# runtime\luanti-5.17.0-win64\worlds/*
+# /src/mods/
